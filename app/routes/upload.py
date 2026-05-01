@@ -16,37 +16,37 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 async def upload_extrato(file: UploadFile = File(...)):
     file_path = f"{UPLOAD_DIR}/{file.filename}"
 
+    # salvar arquivo
     with open(file_path, "wb") as buffer:
         buffer.write(await file.read())
 
-    # texto do PDF
+    # extrair texto
     texto = extrair_texto_pdf(file_path)
 
-    # parser simples
-    transacoes = extrair_transacoes(texto)
+    # parser simples (fallback)
+    transacoes_parser = extrair_transacoes(texto)
 
-    total_entradas = sum(t["valor"] for t in transacoes if t["tipo"] == "entrada")
-    total_saidas = sum(t["valor"] for t in transacoes if t["tipo"] == "saida")
-    saldo = total_entradas + total_saidas
-
-    # IA
+    # IA (principal)
     resposta_ia = extrair_com_ia(texto)
     transacoes_ia = limpar_json_ia(resposta_ia)
+
+    # escolher melhor fonte
+    if isinstance(transacoes_ia, list) and len(transacoes_ia) > 0:
+        transacoes_final = transacoes_ia
+    else:
+        transacoes_final = transacoes_parser
+
+    # calcular totais
+    total_entradas = sum(t["valor"] for t in transacoes_final if t["tipo"] == "entrada")
+    total_saidas = sum(t["valor"] for t in transacoes_final if t["tipo"] == "saida")
+    saldo = total_entradas + total_saidas
 
     return {
         "status": "ok",
         "filename": file.filename,
-
-        "parser_simples": {
-            "total_transacoes": len(transacoes),
-            "total_entradas": round(total_entradas, 2),
-            "total_saidas": round(total_saidas, 2),
-            "saldo": round(saldo, 2),
-            "transacoes": transacoes[:50],
-        },
-
-        "ia": {
-            "total_transacoes": len(transacoes_ia) if isinstance(transacoes_ia, list) else 0,
-            "transacoes": transacoes_ia[:50] if isinstance(transacoes_ia, list) else transacoes_ia
-        }
+        "total_transacoes": len(transacoes_final),
+        "total_entradas": round(total_entradas, 2),
+        "total_saidas": round(total_saidas, 2),
+        "saldo": round(saldo, 2),
+        "transacoes": transacoes_final[:100]
     }
