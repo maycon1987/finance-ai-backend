@@ -31,4 +31,5 @@ async def upload_extrato(file: UploadFile = File(...)):
         "total_saidas": round(total_saidas, 2),
         "saldo": round(saldo, 2),
         "transacoes": transacoes[:50]
+
     }
