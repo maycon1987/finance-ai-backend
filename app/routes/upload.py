@@ -1,3 +1,4 @@
+from app.services.ai_cleaner import limpar_json_ia
 from fastapi import APIRouter, UploadFile, File
 import os
 
@@ -28,17 +29,23 @@ async def upload_extrato(file: UploadFile = File(...)):
     saldo = total_entradas + total_saidas
 
     # IA para extratos mais crus/bagunçados
-    resultado_ia = extrair_com_ia(texto)
+   resposta_ia = extrair_com_ia(texto)
+transacoes_ia = limpar_json_ia(resposta_ia)
 
     return {
-        "status": "ok",
-        "filename": file.filename,
-        "parser_simples": {
-            "total_transacoes": len(transacoes),
-            "total_entradas": round(total_entradas, 2),
-            "total_saidas": round(total_saidas, 2),
-            "saldo": round(saldo, 2),
-            "transacoes": transacoes[:50],
-        },
-        "resultado_ia": resultado_ia
+    "status": "ok",
+    "filename": file.filename,
+
+    "parser_simples": {
+        "total_transacoes": len(transacoes),
+        "total_entradas": round(total_entradas, 2),
+        "total_saidas": round(total_saidas, 2),
+        "saldo": round(saldo, 2),
+        "transacoes": transacoes[:50],
+    },
+
+    "ia": {
+        "total_transacoes": len(transacoes_ia) if isinstance(transacoes_ia, list) else 0,
+        "transacoes": transacoes_ia[:50] if isinstance(transacoes_ia, list) else transacoes_ia
     }
+}
