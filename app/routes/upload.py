@@ -23,13 +23,10 @@ async def upload_extrato(file: UploadFile = File(...)):
     total_saidas = sum(t["valor"] for t in transacoes if t["tipo"] == "saida")
     saldo = total_entradas + total_saidas
 
-    return {
-        "status": "ok",
-        "filename": file.filename,
-        "total_transacoes": len(transacoes),
-        "total_entradas": round(total_entradas, 2),
-        "total_saidas": round(total_saidas, 2),
-        "saldo": round(saldo, 2),
-        "transacoes": transacoes[:50]
+   return {
+    "FUNCIONOU_NOVO_CODIGO": True,
+    "total_transacoes": len(transacoes),
+    "transacoes": transacoes[:5]
+}
 
     }
