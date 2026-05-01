@@ -1,6 +1,9 @@
 from fastapi import FastAPI
+from app.routes import upload
 
 app = FastAPI(title="Finance AI API")
+
+app.include_router(upload.router)
 
 @app.get("/")
 def home():
