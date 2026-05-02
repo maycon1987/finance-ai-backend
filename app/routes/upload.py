@@ -49,7 +49,9 @@ async def upload_extrato(file: UploadFile = File(...)):
         .replace(".PDF", "")
     )
 
-    output_path = f"{UPLOAD_DIR}/resultado_{nome_limpo}.xlsx"
+    nome_arquivo_saida = f"resultado_{nome_limpo}.xlsx"
+    output_path = f"{UPLOAD_DIR}/{nome_arquivo_saida}"
+
     gerar_excel(transacoes_final, output_path)
 
     return {
@@ -60,5 +62,6 @@ async def upload_extrato(file: UploadFile = File(...)):
         "total_saidas": round(total_saidas, 2),
         "saldo": round(saldo, 2),
         "excel_gerado": output_path,
+        "download_url": f"/download/{nome_arquivo_saida}",
         "transacoes": transacoes_final[:50]
     }
