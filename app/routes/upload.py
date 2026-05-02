@@ -18,14 +18,10 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 async def upload_extrato(file: UploadFile = File(...)):
     file_path = f"{UPLOAD_DIR}/{file.filename}"
 
-    # salvar arquivo
     with open(file_path, "wb") as buffer:
         buffer.write(await file.read())
 
-    # =========================
-    # SE FOR EXCEL
-    # =========================
-    if file.filename.endswith(".xlsx"):
+    if file.filename.lower().endswith(".xlsx"):
         transacoes_final = ler_excel(file_path)
 
     else:
@@ -41,23 +37,21 @@ async def upload_extrato(file: UploadFile = File(...)):
         else:
             transacoes_final = transacoes_parser
 
-    # =========================
-    # CALCULOS
-    # =========================
     total_entradas = sum(t["valor"] for t in transacoes_final if t["valor"] > 0)
     total_saidas = sum(abs(t["valor"]) for t in transacoes_final if t["valor"] < 0)
     saldo = total_entradas - total_saidas
 
-    # =========================
-    # GERAR EXCEL
-    # =========================
-    nome_limpo = file.filename.replace(".xlsx", "").replace(".pdf", "")
-output_path = f"{UPLOAD_DIR}/resultado_{nome_limpo}.xlsx"
+    nome_limpo = (
+        file.filename
+        .replace(".xlsx", "")
+        .replace(".XLSX", "")
+        .replace(".pdf", "")
+        .replace(".PDF", "")
+    )
+
+    output_path = f"{UPLOAD_DIR}/resultado_{nome_limpo}.xlsx"
     gerar_excel(transacoes_final, output_path)
 
-    # =========================
-    # RETORNO
-    # =========================
     return {
         "status": "ok",
         "filename": file.filename,
