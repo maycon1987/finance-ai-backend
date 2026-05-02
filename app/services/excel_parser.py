@@ -48,35 +48,40 @@ def converter_valor(valor_raw):
         return None
 
 
-def categorizar(descricao):
+def categorizar(descricao, valor):
     d = descricao.upper()
 
     if "SALDO" in d:
         return "Ignorar"
 
-    if "PIX RECEB" in d:
+    # ENTRADAS
+    if valor > 0:
+        if "PIX RECEB" in d:
+            return "Receitas"
+        if "CR" in d or "CRED" in d:
+            return "Receitas"
+        if "ANTECIPA" in d:
+            return "Receitas"
         return "Receitas"
 
-    if "CRÉD" in d or "CRED" in d or "CR " in d:
-        return "Receitas"
-
-    if "PIX EMIT" in d or "PAGAMENTO PIX" in d:
-        if "FORNECEDOR" in d:
+    # SAÍDAS
+    if valor < 0:
+        if "FORNECEDOR" in d or "DÉB.TIT" in d or "DEB.TIT" in d:
             return "Fornecedores"
-        if "SALARIO" in d or "SALÁRIO" in d or "FERIAS" in d or "FÉRIAS" in d:
+
+        if "SALARIO" in d or "SALÁRIO" in d or "FERIAS" in d:
             return "Salários"
+
         if "LUCRO" in d:
             return "Distribuição de Lucros"
-        return "Pagamentos"
 
-    if "FORNECEDOR" in d or "DÉB.TIT" in d or "DEB.TIT" in d:
-        return "Fornecedores"
+        if "IMPOSTO" in d or "DAS" in d:
+            return "Impostos"
 
-    if "TARIFA" in d or "PACOTE SERVI" in d:
-        return "Taxas Bancárias"
+        if "TARIFA" in d or "PACOTE" in d:
+            return "Taxas Bancárias"
 
-    if "TRIBUTOS" in d or "DAS " in d:
-        return "Impostos"
+        return "Despesas"
 
     return "Outros"
 
