@@ -115,7 +115,7 @@ def ler_excel(file_path):
                 "detalhes": "",
                 "valor": valor,
                 "tipo": "entrada" if valor > 0 else "saida",
-                "categoria": categorizar(historico),
+                "categoria": categorizar(historico, valor),
             }
 
             transacoes.append(transacao_atual)
