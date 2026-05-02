@@ -63,5 +63,5 @@ async def upload_extrato(file: UploadFile = File(...)):
         "saldo": round(saldo, 2),
         "excel_gerado": output_path,
         "download_url": f"/download/{nome_arquivo_saida}",
-        "transacoes": transacoes_final[:50]
+        "transacoes": transacoes_final
     }
