@@ -7,3 +7,5 @@ supabase
 openai
 pdfplumber
 openai
+pandas
+openpyxl
