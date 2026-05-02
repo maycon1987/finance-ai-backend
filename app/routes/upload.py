@@ -6,6 +6,7 @@ from app.services.organizer import extrair_transacoes
 from app.services.ai_parser import extrair_com_ia
 from app.services.ai_cleaner import limpar_json_ia
 from app.services.excel_parser import ler_excel
+from app.services.excel_generator import gerar_excel
 
 router = APIRouter(prefix="/upload", tags=["Upload"])
 
@@ -17,10 +18,13 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 async def upload_extrato(file: UploadFile = File(...)):
     file_path = f"{UPLOAD_DIR}/{file.filename}"
 
+    # salvar arquivo
     with open(file_path, "wb") as buffer:
         buffer.write(await file.read())
 
-    # 👉 SE FOR EXCEL
+    # =========================
+    # SE FOR EXCEL
+    # =========================
     if file.filename.endswith(".xlsx"):
         transacoes_final = ler_excel(file_path)
 
@@ -37,10 +41,22 @@ async def upload_extrato(file: UploadFile = File(...)):
         else:
             transacoes_final = transacoes_parser
 
-    total_entradas = sum(t["valor"] for t in transacoes_final if t["tipo"] == "entrada")
-    total_saidas = sum(t["valor"] for t in transacoes_final if t["tipo"] == "saida")
-    saldo = total_entradas + total_saidas
+    # =========================
+    # CALCULOS
+    # =========================
+    total_entradas = sum(t["valor"] for t in transacoes_final if t["valor"] > 0)
+    total_saidas = sum(abs(t["valor"]) for t in transacoes_final if t["valor"] < 0)
+    saldo = total_entradas - total_saidas
 
+    # =========================
+    # GERAR EXCEL
+    # =========================
+    output_path = f"{UPLOAD_DIR}/resultado_{file.filename}.xlsx"
+    gerar_excel(transacoes_final, output_path)
+
+    # =========================
+    # RETORNO
+    # =========================
     return {
         "status": "ok",
         "filename": file.filename,
@@ -48,5 +64,6 @@ async def upload_extrato(file: UploadFile = File(...)):
         "total_entradas": round(total_entradas, 2),
         "total_saidas": round(total_saidas, 2),
         "saldo": round(saldo, 2),
-        "transacoes": transacoes_final[:100]
+        "excel_gerado": output_path,
+        "transacoes": transacoes_final[:50]
     }
