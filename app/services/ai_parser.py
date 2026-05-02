@@ -1,52 +1,29 @@
-import os
-from openai import OpenAI
-
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+import pandas as pd
 
 
-def dividir_texto(texto, tamanho=6000):
-    return [texto[i:i + tamanho] for i in range(0, len(texto), tamanho)]
+def ler_excel(file_path):
+    df = pd.read_excel(file_path)
 
+    df.columns = [c.lower() for c in df.columns]
 
-def extrair_com_ia(texto: str):
-    try:
-        partes = dividir_texto(texto)
-        resultados = []
+    transacoes = []
 
-        for parte in partes:
-            prompt = f"""
-Você é um especialista em leitura de extratos bancários brasileiros.
+    for _, row in df.iterrows():
+        try:
+            data = str(row.get("data", ""))
+            descricao = str(row.get("histórico", row.get("descricao", "")))
+            valor = float(row.get("valor", 0))
 
-Converta o texto abaixo em JSON estruturado.
+            tipo = "entrada" if valor > 0 else "saida"
 
-Regras:
-- Cada transação deve ter:
-  - data (DD/MM)
-  - descricao
-  - valor (negativo para saída)
-  - tipo (entrada ou saida)
-  - categoria
-- Valores com "C" são entrada
-- Valores com "D" são saída
-- Junte linhas quebradas
-- Ignore lixo como CPF, DOC isolado
+            transacoes.append({
+                "data": data,
+                "descricao": descricao,
+                "valor": valor,
+                "tipo": tipo,
+                "categoria": "Outros"
+            })
+        except:
+            continue
 
-Texto:
-{parte}
-"""
-
-            response = client.chat.completions.create(
-                model="gpt-4.1-mini",
-                messages=[
-                    {"role": "system", "content": "Você extrai dados financeiros com precisão."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.2
-            )
-
-            resultados.append(response.choices[0].message.content)
-
-        return "\n".join(resultados)
-
-    except Exception as e:
-        return f"erro_ia: {str(e)}"
+    return transacoes
