@@ -1,3 +1,5 @@
+from app.routes import download
+app.include_router(download.router)
 from fastapi import FastAPI
 from app.routes import upload
 
