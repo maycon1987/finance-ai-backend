@@ -2,32 +2,32 @@ import pandas as pd
 
 
 def ler_excel(file_path):
-    df = pd.read_excel(file_path)
-
-    # limpar nomes das colunas
-    df.columns = [str(c).strip().lower() for c in df.columns]
-
-    print("COLUNAS ENCONTRADAS:", df.columns)
+    df = pd.read_excel(file_path, header=None)
 
     transacoes = []
 
-    for _, row in df.iterrows():
-        try:
-            # tenta achar colunas automaticamente
-            data = row.get("data") or row.get("data lançamento") or row.get("data lancamento")
-            descricao = row.get("histórico") or row.get("historico") or row.get("descricao")
-            valor = row.get("valor") or row.get("valor (r$)") or row.get("movimento")
+    for i in range(len(df)):
+        linha = df.iloc[i]
 
-            if pd.isna(valor):
+        try:
+            data = str(linha[0]).strip()
+            descricao = str(linha[1]).strip()
+            valor = linha[2]
+
+            # valida se é linha válida
+            if data == "nan" or descricao == "nan":
                 continue
+
+            if isinstance(valor, str):
+                valor = valor.replace(",", ".").replace("R$", "").strip()
 
             valor = float(valor)
 
             tipo = "entrada" if valor > 0 else "saida"
 
             transacoes.append({
-                "data": str(data),
-                "descricao": str(descricao),
+                "data": data,
+                "descricao": descricao,
                 "valor": valor,
                 "tipo": tipo,
                 "categoria": "Outros"
