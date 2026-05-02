@@ -1,6 +1,4 @@
 import pandas as pd
-from collections import defaultdict
-from datetime import datetime
 
 
 def gerar_excel(transacoes, file_path_saida):
