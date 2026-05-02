@@ -4,13 +4,21 @@ import os
 
 router = APIRouter(prefix="/download", tags=["Download"])
 
-@router.get("/")
-def download_excel(path: str):
-    if not os.path.exists(path):
-        return {"erro": "Arquivo não encontrado"}
+UPLOAD_DIR = "storage"
+
+
+@router.get("/{filename}")
+def download_excel(filename: str):
+    file_path = os.path.join(UPLOAD_DIR, filename)
+
+    if not os.path.exists(file_path):
+        return {
+            "erro": "Arquivo não encontrado",
+            "procurando_em": file_path
+        }
 
     return FileResponse(
-        path,
-        media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        filename=os.path.basename(path)
+        file_path,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename=filename
     )
