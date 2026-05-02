@@ -5,6 +5,7 @@ from app.services.parser import extrair_texto_pdf
 from app.services.organizer import extrair_transacoes
 from app.services.ai_parser import extrair_com_ia
 from app.services.ai_cleaner import limpar_json_ia
+from app.services.excel_parser import ler_excel
 
 router = APIRouter(prefix="/upload", tags=["Upload"])
 
@@ -16,27 +17,26 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 async def upload_extrato(file: UploadFile = File(...)):
     file_path = f"{UPLOAD_DIR}/{file.filename}"
 
-    # salvar arquivo
     with open(file_path, "wb") as buffer:
         buffer.write(await file.read())
 
-    # extrair texto
-    texto = extrair_texto_pdf(file_path)
+    # 👉 SE FOR EXCEL
+    if file.filename.endswith(".xlsx"):
+        transacoes_final = ler_excel(file_path)
 
-    # parser simples (fallback)
-    transacoes_parser = extrair_transacoes(texto)
-
-    # IA (principal)
-    resposta_ia = extrair_com_ia(texto)
-    transacoes_ia = limpar_json_ia(resposta_ia)
-
-    # escolher melhor fonte
-    if isinstance(transacoes_ia, list) and len(transacoes_ia) > 0:
-        transacoes_final = transacoes_ia
     else:
-        transacoes_final = transacoes_parser
+        texto = extrair_texto_pdf(file_path)
 
-    # calcular totais
+        transacoes_parser = extrair_transacoes(texto)
+
+        resposta_ia = extrair_com_ia(texto)
+        transacoes_ia = limpar_json_ia(resposta_ia)
+
+        if isinstance(transacoes_ia, list) and len(transacoes_ia) > 0:
+            transacoes_final = transacoes_ia
+        else:
+            transacoes_final = transacoes_parser
+
     total_entradas = sum(t["valor"] for t in transacoes_final if t["tipo"] == "entrada")
     total_saidas = sum(t["valor"] for t in transacoes_final if t["tipo"] == "saida")
     saldo = total_entradas + total_saidas
