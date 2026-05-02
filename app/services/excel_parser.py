@@ -54,31 +54,23 @@ def categorizar(descricao, valor):
     if "SALDO" in d:
         return "Ignorar"
 
-    # ENTRADAS
     if valor > 0:
-        if "PIX RECEB" in d:
-            return "Receitas"
-        if "CR" in d or "CRED" in d:
-            return "Receitas"
-        if "ANTECIPA" in d:
-            return "Receitas"
         return "Receitas"
 
-    # SAÍDAS
     if valor < 0:
         if "FORNECEDOR" in d or "DÉB.TIT" in d or "DEB.TIT" in d:
             return "Fornecedores"
 
-        if "SALARIO" in d or "SALÁRIO" in d or "FERIAS" in d:
+        if "SALARIO" in d or "SALÁRIO" in d or "FERIAS" in d or "FÉRIAS" in d:
             return "Salários"
 
         if "LUCRO" in d:
             return "Distribuição de Lucros"
 
-        if "IMPOSTO" in d or "DAS" in d:
+        if "IMPOSTO" in d or "DAS" in d or "TRIBUT" in d:
             return "Impostos"
 
-        if "TARIFA" in d or "PACOTE" in d:
+        if "TARIFA" in d or "PACOTE" in d or "IOF" in d:
             return "Taxas Bancárias"
 
         return "Despesas"
@@ -98,7 +90,6 @@ def ler_excel(file_path):
         historico = limpar_celula(row.iloc[2]) if len(row) > 2 else ""
         valor_raw = limpar_celula(row.iloc[3]) if len(row) > 3 else ""
 
-        # Nova transação começa quando a coluna A é uma data válida
         if eh_data(data):
             valor = converter_valor(valor_raw)
 
@@ -121,7 +112,6 @@ def ler_excel(file_path):
             transacoes.append(transacao_atual)
 
         else:
-            # Linhas abaixo da transação são detalhes
             if transacao_atual and historico:
                 if transacao_atual["detalhes"]:
                     transacao_atual["detalhes"] += " | " + historico
@@ -132,6 +122,9 @@ def ler_excel(file_path):
                     transacao_atual["descricao"] + " " + transacao_atual["detalhes"]
                 )
 
-                transacao_atual["categoria"] = categorizar(descricao_completa)
+                transacao_atual["categoria"] = categorizar(
+                    descricao_completa,
+                    transacao_atual["valor"]
+                )
 
     return transacoes
