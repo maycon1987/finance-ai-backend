@@ -1,57 +1,300 @@
+import re
 import pandas as pd
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.utils import get_column_letter
+
+
+COR_ROXO = "5B2C83"
+COR_AMARELO = "FFD966"
+COR_VERDE = "D9EAD3"
+COR_LARANJA = "FCE4D6"
+COR_CINZA = "F2F2F2"
+COR_BRANCO = "FFFFFF"
+
+
+def moeda(valor):
+    try:
+        return float(valor)
+    except Exception:
+        return 0.0
+
+
+def limpar_nome_cliente(detalhes):
+    if not detalhes:
+        return ""
+
+    partes = [p.strip() for p in str(detalhes).split("|") if p.strip()]
+
+    remover = [
+        "Recebimento Pix",
+        "Pagamento Pix",
+        "Transferência Pix",
+        "MHM CAIXAS COMERCIO DE EMBALAGENS LTDA",
+    ]
+
+    candidatos = []
+
+    for p in partes:
+        if any(r.upper() in p.upper() for r in remover):
+            continue
+
+        if re.search(r"\d{2}\.\d{3}\.\d{3}", p):
+            continue
+
+        if "***" in p:
+            continue
+
+        candidatos.append(p)
+
+    if candidatos:
+        return candidatos[0]
+
+    return partes[0] if partes else ""
+
+
+def tipo_movimento(descricao, detalhes):
+    texto = f"{descricao} {detalhes}".upper()
+
+    if "PIX" in texto:
+        return "PIX"
+
+    if "MAESTRO" in texto or "VISA ELECTRON" in texto or "ELO DÉBITO" in texto or "DEB._" in texto:
+        return "DÉBITO"
+
+    if "MASTERCARD" in texto or "VISA" in texto or "CRED" in texto or "CRÉD" in texto:
+        return "CRÉDITO"
+
+    if "BOLETO" in texto or "COBRANÇA" in texto or "COBRANCA" in texto:
+        return "BOLETO"
+
+    if "DINHEIRO" in texto:
+        return "DINHEIRO"
+
+    return descricao
+
+
+def ordem_movimento(descricao, detalhes):
+    texto = f"{descricao} {detalhes}".upper()
+
+    if "ANTECIPA" in texto:
+        return 5
+
+    if "PIX" in texto:
+        return 1
+
+    if "MAESTRO" in texto or "VISA ELECTRON" in texto or "ELO DÉBITO" in texto or "DEB._" in texto:
+        return 2
+
+    if "CRED" in texto or "CRÉD" in texto or "MASTERCARD" in texto or "VISA" in texto:
+        return 3
+
+    if "BOLETO" in texto or "COBRANÇA" in texto or "COBRANCA" in texto:
+        return 4
+
+    return 6
+
+
+def preparar_transacoes(transacoes):
+    df = pd.DataFrame(transacoes)
+
+    if df.empty:
+        return df
+
+    df["valor"] = pd.to_numeric(df["valor"], errors="coerce").fillna(0)
+    df["entrada"] = df["valor"].apply(lambda x: x if x > 0 else 0)
+    df["saida"] = df["valor"].apply(lambda x: abs(x) if x < 0 else 0)
+
+    df["Data"] = pd.to_datetime(df["data"], dayfirst=True, errors="coerce").dt.strftime("%d/%m/%Y")
+    df["Descrição"] = df.apply(lambda r: tipo_movimento(r.get("descricao", ""), r.get("detalhes", "")), axis=1)
+    df["Detalhes"] = df["detalhes"].apply(limpar_nome_cliente)
+    df["Valor"] = df["valor"]
+    df["Tipo"] = df["tipo"]
+    df["Categoria"] = df["categoria"]
+    df["Entrada"] = df["entrada"]
+    df["Saída"] = df["saida"]
+    df["_ordem"] = df.apply(lambda r: ordem_movimento(r.get("descricao", ""), r.get("detalhes", "")), axis=1)
+
+    df = df.sort_values(by=["_ordem", "Data"], ascending=[True, True])
+
+    return df[["Data", "Descrição", "Detalhes", "Valor", "Tipo", "Categoria", "Entrada", "Saída"]]
+
+
+def aplicar_estilo_tabela(ws):
+    header_fill = PatternFill("solid", fgColor=COR_ROXO)
+    header_font = Font(color=COR_BRANCO, bold=True)
+    border = Border(
+        left=Side(style="thin", color="DDDDDD"),
+        right=Side(style="thin", color="DDDDDD"),
+        top=Side(style="thin", color="DDDDDD"),
+        bottom=Side(style="thin", color="DDDDDD"),
+    )
+
+    for cell in ws[1]:
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = border
+
+    for row in ws.iter_rows():
+        for cell in row:
+            cell.border = border
+            cell.alignment = Alignment(vertical="center")
+
+    for col in ws.columns:
+        max_len = 0
+        col_letter = get_column_letter(col[0].column)
+
+        for cell in col:
+            value = str(cell.value) if cell.value is not None else ""
+            max_len = max(max_len, len(value))
+
+        ws.column_dimensions[col_letter].width = min(max_len + 4, 45)
+
+    ws.freeze_panes = "A2"
+    ws.auto_filter.ref = ws.dimensions
+
+    moeda_cols = ["D", "G", "H"]
+
+    for col in moeda_cols:
+        for cell in ws[col][1:]:
+            cell.number_format = 'R$ #,##0.00;[Red]-R$ #,##0.00'
+
+
+def escrever_secao(ws, col_nome, col_valor, linha, titulo, dados, cor=COR_CINZA):
+    ws.cell(row=linha, column=col_nome).value = titulo
+    ws.cell(row=linha, column=col_nome).font = Font(bold=True)
+    ws.cell(row=linha, column=col_nome).fill = PatternFill("solid", fgColor=cor)
+    ws.cell(row=linha, column=col_valor).value = "VALOR"
+    ws.cell(row=linha, column=col_valor).font = Font(bold=True)
+    ws.cell(row=linha, column=col_valor).fill = PatternFill("solid", fgColor=cor)
+
+    linha += 1
+
+    total = 0
+
+    for nome, valor in dados:
+        ws.cell(row=linha, column=col_nome).value = nome
+        ws.cell(row=linha, column=col_valor).value = moeda(valor)
+        ws.cell(row=linha, column=col_valor).number_format = 'R$ #,##0.00'
+        total += moeda(valor)
+        linha += 1
+
+    linha += 1
+
+    ws.cell(row=linha, column=col_nome).value = "TOTAL"
+    ws.cell(row=linha, column=col_nome).font = Font(bold=True)
+    ws.cell(row=linha, column=col_valor).value = total
+    ws.cell(row=linha, column=col_valor).font = Font(bold=True)
+    ws.cell(row=linha, column=col_valor).number_format = 'R$ #,##0.00'
+
+    return linha + 2
+
+
+def resumo_por_texto(df, filtro_categoria=None, filtro_texto=None, entrada=None):
+    base = df.copy()
+
+    if filtro_categoria:
+        base = base[base["Categoria"].str.upper().isin([c.upper() for c in filtro_categoria])]
+
+    if filtro_texto:
+        texto = filtro_texto.upper()
+        base = base[
+            base["Descrição"].str.upper().str.contains(texto, na=False) |
+            base["Detalhes"].str.upper().str.contains(texto, na=False)
+        ]
+
+    if entrada is True:
+        base = base[base["Valor"] > 0]
+
+    if entrada is False:
+        base = base[base["Valor"] < 0]
+
+    if base.empty:
+        return []
+
+    resumo = (
+        base.groupby("Detalhes")["Valor"]
+        .sum()
+        .reset_index()
+        .sort_values("Valor", ascending=False)
+    )
+
+    return [(r["Detalhes"] or "SEM DETALHE", abs(r["Valor"])) for _, r in resumo.iterrows()]
+
+
+def criar_resumo(ws, df):
+    ws.title = "Sicoob Resumo"
+
+    ws.merge_cells("A1:H1")
+    ws["A1"] = "DRE SICOOB"
+    ws["A1"].font = Font(bold=True, size=14)
+    ws["A1"].alignment = Alignment(horizontal="center")
+    ws["A1"].fill = PatternFill("solid", fgColor=COR_AMARELO)
+
+    entradas_vendas = [
+        ("BOLETOS", df[(df["Valor"] > 0) & (df["Descrição"].str.upper().str.contains("BOLETO|COBRANÇA|COBRANCA", na=False))]["Valor"].sum()),
+        ("CARTÕES", df[(df["Valor"] > 0) & (df["Descrição"].str.upper().isin(["DÉBITO", "CRÉDITO"]))]["Valor"].sum()),
+        ("PIX RECEBIDO", df[(df["Valor"] > 0) & (df["Descrição"].str.upper() == "PIX")]["Valor"].sum()),
+    ]
+
+    cartoes = [
+        ("CARTÃO DÉBITO", df[(df["Valor"] > 0) & (df["Descrição"].str.upper() == "DÉBITO")]["Valor"].sum()),
+        ("CARTÃO CRÉDITO", df[(df["Valor"] > 0) & (df["Descrição"].str.upper() == "CRÉDITO")]["Valor"].sum()),
+    ]
+
+    fornecedores = resumo_por_texto(df, filtro_categoria=["Fornecedores"], entrada=False)
+    impostos = resumo_por_texto(df, filtro_categoria=["Impostos"], entrada=False)
+    tarifas = resumo_por_texto(df, filtro_categoria=["Taxas Bancárias"], entrada=False)
+    lucros = resumo_por_texto(df, filtro_categoria=["Distribuição de Lucros"], entrada=False)
+
+    despesas_fixas = resumo_por_texto(df, filtro_categoria=["Despesas"], entrada=False)[:35]
+    folha = resumo_por_texto(df, filtro_categoria=["Salários"], entrada=False)
+    despesas_variaveis = resumo_por_texto(df, filtro_categoria=["Despesas"], entrada=False)[35:]
+
+    linha_a = 3
+    linha_d = 3
+    linha_g = 3
+
+    linha_a = escrever_secao(ws, 1, 2, linha_a, "ENTRADAS (VENDAS)", entradas_vendas, COR_VERDE)
+    linha_a = escrever_secao(ws, 1, 2, linha_a, "CARTÕES DETALHADOS", cartoes, COR_CINZA)
+
+    linha_d = escrever_secao(ws, 4, 5, linha_d, "DESPESAS FIXAS", despesas_fixas, COR_CINZA)
+    linha_d = escrever_secao(ws, 4, 5, linha_d, "DESPESAS VARIÁVEIS", despesas_variaveis, COR_CINZA)
+    linha_d = escrever_secao(ws, 4, 5, linha_d, "FOLHA DE PAGAMENTO", folha, COR_CINZA)
+
+    linha_g = escrever_secao(ws, 7, 8, linha_g, "FORNECEDORES", fornecedores, COR_CINZA)
+    linha_g = escrever_secao(ws, 7, 8, linha_g, "IMPOSTOS", impostos, COR_CINZA)
+    linha_g = escrever_secao(ws, 7, 8, linha_g, "TARIFAS BANCÁRIAS", tarifas, COR_CINZA)
+    linha_g = escrever_secao(ws, 7, 8, linha_g, "DISTRIBUIÇÃO DE LUCROS", lucros, COR_CINZA)
+
+    for col in range(1, 9):
+        ws.column_dimensions[get_column_letter(col)].width = 24
+
+    for row in ws.iter_rows():
+        for cell in row:
+            cell.alignment = Alignment(vertical="center")
+            cell.border = Border(
+                left=Side(style="thin", color="DDDDDD"),
+                right=Side(style="thin", color="DDDDDD"),
+                top=Side(style="thin", color="DDDDDD"),
+                bottom=Side(style="thin", color="DDDDDD"),
+            )
 
 
 def gerar_excel(transacoes, file_path_saida):
-    df = pd.DataFrame(transacoes)
+    df = preparar_transacoes(transacoes)
 
     if df.empty:
         return None
 
-    # =========================
-    # NORMALIZAÇÃO
-    # =========================
-    df["valor"] = pd.to_numeric(df["valor"], errors="coerce").fillna(0)
-
-    df["entrada"] = df["valor"].apply(lambda x: x if x > 0 else 0)
-    df["saida"] = df["valor"].apply(lambda x: abs(x) if x < 0 else 0)
-
-    # =========================
-    # RESUMO GERAL
-    # =========================
-    total_entradas = df["entrada"].sum()
-    total_saidas = df["saida"].sum()
-    saldo = total_entradas - total_saidas
-
-    resumo_df = pd.DataFrame([
-        {"Tipo": "Total Entradas", "Valor": total_entradas},
-        {"Tipo": "Total Saídas", "Valor": total_saidas},
-        {"Tipo": "Saldo", "Valor": saldo},
-    ])
-
-    # =========================
-    # POR CATEGORIA
-    # =========================
-    categoria_df = df.groupby("categoria")["valor"].sum().reset_index()
-    categoria_df = categoria_df.sort_values(by="valor", ascending=False)
-
-    # =========================
-    # POR DIA
-    # =========================
-    try:
-        df["data"] = pd.to_datetime(df["data"], errors="coerce")
-        diario_df = df.groupby(df["data"].dt.date)["valor"].sum().reset_index()
-    except:
-        diario_df = pd.DataFrame()
-
-    # =========================
-    # EXPORTAÇÃO
-    # =========================
     with pd.ExcelWriter(file_path_saida, engine="openpyxl") as writer:
-        df.to_excel(writer, sheet_name="Transacoes", index=False)
-        resumo_df.to_excel(writer, sheet_name="Resumo", index=False)
-        categoria_df.to_excel(writer, sheet_name="Por Categoria", index=False)
+        df.to_excel(writer, sheet_name="Sicoob", index=False)
 
-        if not diario_df.empty:
-            diario_df.to_excel(writer, sheet_name="Por Dia", index=False)
+        workbook = writer.book
+        ws_sicoob = workbook["Sicoob"]
+        aplicar_estilo_tabela(ws_sicoob)
+
+        ws_resumo = workbook.create_sheet("Sicoob Resumo")
+        criar_resumo(ws_resumo, df)
 
     return file_path_saida
